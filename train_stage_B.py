@@ -27,14 +27,14 @@ ema_start = 5000
 ema_every = 100
 ema_beta = 0.9
 batch_size = 384
-grad_accum_steps = 1
+grad_accum_steps = 32
 max_iters = updates * grad_accum_steps
 print_every = 1000 * grad_accum_steps
 extra_ckpt_every = 10000 * grad_accum_steps
 lr = 1e-4
-generate_new_wandb_id = False
+generate_new_wandb_id = True
 
-dataset_path = ""
+dataset_path = "pipe:aws s3 cp s3://stability-aws/laion-a-native/{part-0/{00000..18699}.tar,part-1/{00000..18699}.tar,part-2/{00000..18699}.tar,part-3/{00000..18699}.tar,part-4/{00000..18699}.tar} -"
 run_name = "Würstchen-Paella-v4-512-CLIP-text"
 output_path = f"output/würstchen/{run_name}"
 os.makedirs(output_path, exist_ok=True)
@@ -42,19 +42,22 @@ checkpoint_dir = f"models/würstchen/"
 checkpoint_path = os.path.join(checkpoint_dir, run_name, "model.pt")
 os.makedirs(os.path.join(checkpoint_dir, run_name), exist_ok=True)
 
-wandv_project = ""
-wandv_entity = ""
+wandv_project = "testwurst"
+wandv_entity = "mlrichter"
 wandb_run_name = run_name
 
 
 def ddp_setup(rank, world_size, n_node, node_id):  # <--- DDP
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "33751"
+    ws = world_size * n_node
+    rk = rank + (node_id * world_size)
     torch.cuda.set_device(rank)
+    print(f"Initalizing process group, RANK {rk}, World Size {ws}")
     init_process_group(
         backend="nccl",
-        rank=rank + node_id * world_size, world_size=world_size * n_node,
-        init_method="file:///mnt/nvme/home/dome/src/würstchen/dist_file4",
+        rank=rk, world_size=ws,
+        init_method="file:///fsx/mlrichter/dist_file4",
     )
     print(f"[GPU {rank + node_id * world_size}] READY")
 
@@ -314,5 +317,5 @@ def train(gpu_id, world_size, n_nodes):
 
 if __name__ == '__main__':
     world_size = torch.cuda.device_count()
-    n_node = 1
+    n_node = 2
     mp.spawn(train, args=(world_size, n_node), nprocs=world_size)

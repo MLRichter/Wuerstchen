@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --partition=a100-cu117
-#SBATCH --nodes=4
+#SBATCH --partition=g40
+#SBATCH --nodes=2
+#SBATCH --gpus=8
 #SBATCH --ntasks-per-node=1
-#SBATCH --exclusive
 #SBATCH --job-name=würstchen
-#SBATCH --comment proj
+#SBATCH --comment laion
 
 export NCCL_PROTO=simple
 
@@ -27,9 +27,9 @@ export CXX=g++
 
 eval "$(conda shell.bash hook)"
 conda activate env
-cd würstchen
-rm dist_file4
-srun --comment proj python3 train_stage_B.py
+#cd würstchen
+rm ../dist_file4
+srun --comment laion python3 train_stage_B.py
 
 
 
