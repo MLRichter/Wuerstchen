@@ -27,7 +27,7 @@ ema_start = 5000
 ema_every = 100
 ema_beta = 0.9
 batch_size = 384
-grad_accum_steps = 32
+grad_accum_steps = 12
 max_iters = updates * grad_accum_steps
 print_every = 1000 * grad_accum_steps
 extra_ckpt_every = 10000 * grad_accum_steps
@@ -51,20 +51,22 @@ def ddp_setup(rank, world_size, n_node, node_id):  # <--- DDP
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "33751"
     ws = world_size * n_node
-    rk = rank + (node_id * world_size)
+    rk = int(os.environ.get("SLURM_PROCID"))
+    print(f"Rank {rk} setting device to {rank}")
     torch.cuda.set_device(rank)
-    print(f"Initalizing process group, RANK {rk}, World Size {ws}")
+    print(f"Initalizing process group, Local Rank {rank}, RANK {rk}, World Size {ws}")
     init_process_group(
         backend="nccl",
         rank=rk, world_size=ws,
+        #init_method="env://",
         init_method="file:///fsx/mlrichter/dist_file4",
     )
     print(f"[GPU {rank + node_id * world_size}] READY")
 
 
 def train(gpu_id, world_size, n_nodes):
-    node_id = int(os.environ["SLURM_PROCID"])
-    main_node = gpu_id == 0 and node_id == 0
+    node_id = int(os.environ["SLURM_PROCID"]) // world_size
+    main_node = int(os.environ.get("SLURM_PROCID")) == 0 #gpu_id == 0 and node_id == 0
     ddp_setup(gpu_id, world_size, n_nodes, node_id)  # <--- DDP
     device = torch.device(gpu_id)
 
@@ -85,6 +87,7 @@ def train(gpu_id, world_size, n_nodes):
     )
 
     real_batch_size = batch_size // (world_size * n_nodes * grad_accum_steps)
+    print(f"micro_batch ({real_batch_size}) = batch ({batch_size}) / n_gpus ({world_size}) x nnodes ({n_nodes}) x grad_acc ({grad_accum_steps})")
 
     dataloader = DataLoader(dataset, batch_size=real_batch_size, num_workers=8, pin_memory=True)
 
@@ -316,6 +319,10 @@ def train(gpu_id, world_size, n_nodes):
 
 
 if __name__ == '__main__':
+    print("Launching Script")
     world_size = torch.cuda.device_count()
-    n_node = 2
-    mp.spawn(train, args=(world_size, n_node), nprocs=world_size)
+    n_node = 4
+    local_rank = int(os.environ.get("SLURM_LOCALID"))
+    print("Detecting", torch.cuda.device_count(), "GPUs for each of the", n_node, "nodes")
+    #mp.spawn(train, args=(world_size, n_node), nprocs=world_size)
+    train(local_rank, world_size, n_node)

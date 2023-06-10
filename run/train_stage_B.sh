@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --partition=g40
-#SBATCH --nodes=2
-#SBATCH --gpus=8
-#SBATCH --ntasks-per-node=1
+#SBATCH --nodes=4
+#SBATCH --gpus-per-node=8
+#SBATCH --ntasks-per-node=8
 #SBATCH --job-name=würstchen
 #SBATCH --comment laion
 
@@ -26,7 +26,13 @@ export PYTHONWARNINGS="ignore"
 export CXX=g++
 
 eval "$(conda shell.bash hook)"
-conda activate env
+
+master_addr=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+export MASTER_ADDR=$master_addr
+export MASTER_PORT=33751
+echo "r$SLURM_NODEID master: $MASTER_ADDR"
+echo "r$SLURM_NODEID Launching python script"
+
 #cd würstchen
 rm ../dist_file4
 srun --comment laion python3 train_stage_B.py
